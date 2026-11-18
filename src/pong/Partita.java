@@ -3,14 +3,17 @@ package pong;
 
 import giocatori.GiocatoreAutomatico;
 import java.util.Random;
+import geometria.Rettangolo;
 import ostacoli.Livello;
 import ostacoli.MotoreDeiLivelli;
 import ostacoli.Ostacoli;
 import ostacoli.Ostacolo;
+import stelle.Raccolta;
+import stelle.Stella;
 
 /**
  * Una partita a un livello: voi a sinistra, il giocatore automatico a destra, due racchette,
- * una palla, gli ostacoli del livello e i conti di chi vince. Il livello si sceglie prima di cominciare.
+ * una palla, gli ostacoli del livello e i conti di chi vince.
  */
 class Partita {
     /** Si gioca a 5, con almeno due punti di scarto (5 a 4 non basta, 6 a 4 sì). */
@@ -27,6 +30,11 @@ class Partita {
     private Livello livello;
     private Ostacoli ostacoli;
     private boolean iniziata;
+    private final Livelli livelli;
+    private final Raccolta raccolta = new Raccolta(Raccolta.STELLE_PER_UNA_VITA);
+    private Stella stella;
+    private int fotogrammiAllaStella;
+    private final Random caso = new Random();
 
     /** Una partita fra umano, a sinistra, e il giocatore automatico, a destra; si comincia dal livello 1. */
     Partita(Campo campo, Giocatore umano) {
@@ -36,6 +44,7 @@ class Partita {
         this.racchettaSinistra = new Racchetta(30, centroY);
         this.racchettaDestra = new Racchetta(campo.getLarghezza() - 30 - Racchetta.LARGHEZZA, centroY);
         this.palla = new Palla(campo.getLarghezza() / 2.0, campo.getAltezza() / 2.0);
+        this.livelli = new Livelli(MotoreDeiLivelli.NUMERO_LIVELLI, 3, Lato.SINISTRA);
         preparaLivello(1);
     }
 
@@ -51,6 +60,8 @@ class Partita {
         punteggio.azzera();
         iniziata = false;
         palla.fermaIn(campo.getLarghezza() / 2.0, campo.getAltezza() / 2.0);
+        stella = null;
+        programmaStella();
     }
 
     // Quello che lo Schermo può chiedere: solo leggere. Il Punteggio resta qui dentro.
@@ -76,9 +87,14 @@ class Partita {
      * Pretende: la partita non è in corso.
      */
     void avvia() {
-        if (iniziata) preparaLivello(livello.numero());
+        if (livelli.isFinito()) {
+            livelli.ricomincia();
+            preparaLivello(livelli.getLivello());
+        } else if (iniziata) {
+            preparaLivello(livelli.getLivello());
+        }
         iniziata = true;
-        lanciaPalla(new Random().nextBoolean());
+        lanciaPalla(caso.nextBoolean());
     }
 
     /** Lancia la palla dal centro, alla velocità del livello. */
@@ -91,6 +107,7 @@ class Partita {
         if (!isInCorso()) return;
         ostacoli.avanzaTutti();
         muoviRacchette();
+        aggiornaStella();
         palla.muovi();
         controllaRimbalzi();
         controllaOstacoli();
@@ -127,6 +144,36 @@ class Partita {
         }
     }
 
+    /** Fa apparire, avanzare e raccogliere una stella nella corsia sinistra. */
+    private void aggiornaStella() {
+        if (stella == null) {
+            fotogrammiAllaStella--;
+            if (fotogrammiAllaStella <= 0) {
+                double x = racchettaSinistra.getX() + racchettaSinistra.getLarghezza();
+                double y = caso.nextDouble() * Math.max(1, campo.getAltezza() - 16);
+                Rettangolo area = new Rettangolo(x, y, 16, 16);
+                stella = new Stella(area, livello.durataStella());
+            }
+        } else {
+            stella.avanza();
+            Rettangolo areaRacchetta = new Rettangolo(
+                    racchettaSinistra.getX(), racchettaSinistra.getY(),
+                    racchettaSinistra.getLarghezza(), racchettaSinistra.getAltezza());
+            if (stella.isVisibile() && areaRacchetta.tocca(stella.getArea())) {
+                stella.raccogli();
+                if (raccolta.aggiungi()) livelli.guadagnaVita();
+                programmaStella();
+            } else if (!stella.isVisibile()) {
+                stella = null;
+                programmaStella();
+            }
+        }
+    }
+
+    private void programmaStella() {
+        fotogrammiAllaStella = 120 + caso.nextInt(181);
+    }
+
     /** Se la palla è uscita da un lato, il punto va all'altro lato. */
     private void controllaPunto() {
         double x = palla.getPosizione().x();
@@ -143,6 +190,7 @@ class Partita {
     private void dopoIlPunto(boolean versoSinistra) {
         if (punteggio.isFinita()) {
             palla.fermaIn(campo.getLarghezza() / 2.0, campo.getAltezza() / 2.0);
+            livelli.partitaFinita(punteggio.getVincitore());
         } else {
             lanciaPalla(!versoSinistra);
         }
@@ -152,4 +200,7 @@ class Partita {
     Palla getPalla() { return palla; }
     Racchetta getRacchettaSinistra() { return racchettaSinistra; }
     Racchetta getRacchettaDestra() { return racchettaDestra; }
+    Livelli getLivelli() { return livelli; }
+    Stella getStella() { return stella; }
+    Raccolta getRaccolta() { return raccolta; }
 }

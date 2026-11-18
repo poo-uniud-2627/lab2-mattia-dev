@@ -9,17 +9,19 @@ import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Polygon;
 import java.awt.RenderingHints;
 import java.awt.event.KeyEvent;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.Timer;
-import ostacoli.MotoreDeiLivelli;
 import ostacoli.Ostacolo;
+import stelle.Raccolta;
+import stelle.Stella;
 
 /**
  * Mostra la partita: sessanta volte al secondo la fa avanzare di un passo e la ridisegna.
- * Prima di cominciare legge i tasti da 1 a 5 (il livello) e SPAZIO (via!).
+ * Prima di cominciare legge SPAZIO (via!) e aggiorna automaticamente i livelli.
  * Non prende nessuna decisione di gioco (quelle sono della Partita e del motore dei livelli).
  */
 class Schermo extends JPanel {
@@ -51,12 +53,6 @@ class Schermo extends JPanel {
 
     private void passo() {
         if (!partita.isInCorso()) {
-            for (int numero = 1; numero <= MotoreDeiLivelli.NUMERO_LIVELLI; numero++) {
-                // il tasto del numero, sopra le lettere o nel tastierino numerico
-                if (tastiera.premuto(KeyEvent.VK_0 + numero) || tastiera.premuto(KeyEvent.VK_NUMPAD0 + numero)) {
-                    partita.preparaLivello(numero);
-                }
-            }
             if (tastiera.premuto(KeyEvent.VK_SPACE)) partita.avvia();
         }
         partita.aggiorna();
@@ -96,6 +92,11 @@ class Schermo extends JPanel {
         g2.setColor(Color.WHITE);
         disegna(g2, partita.getRacchettaSinistra());
         disegna(g2, partita.getRacchettaDestra());
+        Stella stella = partita.getStella();
+        if (stella != null && stella.isVisibile()) {
+            g2.setColor(Color.YELLOW);
+            disegnaStella(g2, stella.getArea());
+        }
         Palla palla = partita.getPalla();
         int r = palla.getRaggio();
         Posizione p = palla.getPosizione();
@@ -107,6 +108,22 @@ class Schermo extends JPanel {
 
         g2.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 18));
         scriviAlCentro(g2, "Livello " + partita.getLivello().numero(), larghezza, altezza - 20);
+        g2.setColor(Color.WHITE);
+        g2.drawString("Vite: " + partita.getLivelli().getVite(), 20, 28);
+
+        Raccolta raccolta = partita.getRaccolta();
+        g2.drawString("Stelle raccolte:", 20, 52);
+        for (int i = 0; i < Raccolta.STELLE_PER_UNA_VITA; i++) {
+            double x = 20 + i * 18;
+            double y = 60;
+            Rettangolo area = new Rettangolo(x, y, 14, 14);
+            if (i < raccolta.getStelle()) {
+                g2.setColor(Color.YELLOW);
+            } else {
+                g2.setColor(Color.DARK_GRAY);
+            }
+            disegnaStella(g2, area);
+        }
 
         if (!partita.isInCorso()) {
             g2.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 22));
@@ -115,7 +132,7 @@ class Schermo extends JPanel {
             } else if (partita.getVincitore() == Lato.DESTRA) {
                 scriviAlCentro(g2, "Ha vinto il computer.", larghezza, altezza / 2 - 40);
             }
-            scriviAlCentro(g2, "Premi un tasto da 1 a 5 per scegliere il livello, poi SPAZIO", larghezza, altezza / 2 + 60);
+            scriviAlCentro(g2, "Premi SPAZIO per continuare", larghezza, altezza / 2 + 60);
         }
     }
 
@@ -127,6 +144,22 @@ class Schermo extends JPanel {
     private static void riempi(Graphics2D g2, Rettangolo r) {
         g2.fillRect((int) Math.round(r.x()), (int) Math.round(r.y()),
                 (int) Math.round(r.larghezza()), (int) Math.round(r.altezza()));
+    }
+
+    private static void disegnaStella(Graphics2D g2, Rettangolo r) {
+        double cx = r.x() + r.larghezza() / 2.0;
+        double cy = r.y() + r.altezza() / 2.0;
+        double raggiEsterni = Math.min(r.larghezza(), r.altezza()) / 2.0;
+        double raggiInterni = raggiEsterni * 0.45;
+        int[] x = new int[10];
+        int[] y = new int[10];
+        for (int i = 0; i < 10; i++) {
+            double angolo = -Math.PI / 2 + i * Math.PI / 5;
+            double raggio = i % 2 == 0 ? raggiEsterni : raggiInterni;
+            x[i] = (int) Math.round(cx + Math.cos(angolo) * raggio);
+            y[i] = (int) Math.round(cy + Math.sin(angolo) * raggio);
+        }
+        g2.fillPolygon(new Polygon(x, y, 10));
     }
 
     /** Scrive il testo centrato in orizzontale in un campo largo larghezza, all'altezza y. */
